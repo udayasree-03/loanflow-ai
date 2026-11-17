@@ -1,0 +1,21 @@
+# Backend framework
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+python-multipart
+
+# Database
+sqlalchemy
+psycopg[binary]
+alembic
+
+# Document processing
+pymupdf
+
+# Environment configuration
+python-dotenv
+
+# Testing
+pytest
+httpx
