@@ -38,6 +38,16 @@ class Settings(BaseSettings):
         "image/tiff",
     ]
 
+    # LLM & Agent Settings
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "llama3"
+    OLLAMA_TIMEOUT_SECONDS: float = 15.0
+    MAX_DTI_BENCHMARK_PCT: float = 43.0
+    MAX_FRONT_END_DTI_BENCHMARK_PCT: float = 28.0
+    DEFAULT_MORTGAGE_INTEREST_RATE_PCT: float = 6.5
+    DEFAULT_LOAN_TERM_YEARS: int = 30
+    DEFAULT_PROPERTY_VALUE_MULTIPLIER: float = 1.25  # If property value not supplied, default LTV 80%
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def async_database_url(self) -> str:

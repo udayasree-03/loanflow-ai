@@ -21,19 +21,35 @@ router = APIRouter()
     response_model=DocumentDetailResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Upload mortgage document and extract text",
-    description="Uploads a PDF or image mortgage document, extracts its digital text layer via PyMuPDF, and classifies document type.",
+    description="Uploads a PDF or image mortgage document, extracts its digital text layer via PyMuPDF, and classifies document type. Note: loan_application_id is optional and can be left blank.",
 )
 async def upload_document(
     file: UploadFile = File(..., description="Mortgage document file (PDF, PNG, JPEG, TIFF)"),
-    loan_application_id: Optional[uuid.UUID] = Form(None, description="Optional associated loan application UUID"),
+    loan_application_id: Optional[str] = Form(None, description="Optional associated loan application UUID (leave empty if not linked)"),
     document_type: Optional[str] = Form(None, description="Optional manual type hint (w2, form_1040, paystub, bank_statement)"),
     db: AsyncSession = Depends(get_db),
 ) -> DocumentDetailResponse:
+    # Safely parse loan_application_id form field
+    parsed_app_id: Optional[uuid.UUID] = None
+    if loan_application_id and loan_application_id.strip():
+        cleaned = loan_application_id.strip()
+        # Ignore Swagger UI placeholder defaults or empty values
+        if cleaned.lower() not in ("string", "null", "none"):
+            try:
+                parsed_app_id = uuid.UUID(cleaned)
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid loan_application_id format: '{loan_application_id}'. Must be a valid UUID.",
+                )
+
+    clean_type = document_type.strip() if document_type and document_type.strip() != "string" else None
+
     doc = await document_extractor.save_and_extract_document(
         db=db,
         file=file,
-        loan_application_id=loan_application_id,
-        document_type_hint=document_type,
+        loan_application_id=parsed_app_id,
+        document_type_hint=clean_type,
     )
     loaded = await document_extractor.get_document_with_extraction(db, doc.id)
     return DocumentDetailResponse.model_validate(loaded)

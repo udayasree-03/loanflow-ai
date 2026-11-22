@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.database.models.extraction_result import ExtractionResult
+from app.database.models.loan_application import LoanApplication
 from app.database.models.mortgage_document import MortgageDocument
 
 logger = logging.getLogger("loanflow.services.extractor")
@@ -111,7 +112,21 @@ async def save_and_extract_document(
     document_type_hint: Optional[str] = None,
 ) -> MortgageDocument:
     """Validate, persist to disk, extract text with PyMuPDF, and save DB records."""
-    # 1. Validate MIME type
+    # 1. Validate associated Loan Application if provided
+    if loan_application_id:
+        app_check = await db.execute(
+            select(LoanApplication.id).where(LoanApplication.id == loan_application_id)
+        )
+        if not app_check.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=(
+                    f"Loan application '{loan_application_id}' does not exist. "
+                    "Please create a loan application first or leave loan_application_id empty."
+                ),
+            )
+
+    # 2. Validate MIME type
     content_type = file.content_type or "application/octet-stream"
     if content_type not in settings.ALLOWED_MIME_TYPES:
         raise HTTPException(
@@ -119,7 +134,7 @@ async def save_and_extract_document(
             detail=f"Disallowed file type '{content_type}'. Allowed: {settings.ALLOWED_MIME_TYPES}",
         )
 
-    # 2. Read file content and check size limit
+    # 3. Read file content and check size limit
     content = await file.read()
     file_size = len(content)
     if file_size > settings.MAX_UPLOAD_SIZE_BYTES:
@@ -128,7 +143,7 @@ async def save_and_extract_document(
             detail=f"File exceeds maximum allowed size of {settings.MAX_UPLOAD_SIZE_BYTES // (1024 * 1024)} MB",
         )
 
-    # 3. Generate sanitized disk filename & save file
+    # 4. Generate sanitized disk filename & save file
     doc_id = uuid.uuid4()
     original_name = Path(file.filename or "document.pdf").name
     safe_filename = f"{doc_id}_{re.sub(r'[^a-zA-Z0-9_.-]', '_', original_name)}"
@@ -137,7 +152,7 @@ async def save_and_extract_document(
     destination_path.write_bytes(content)
     logger.info("Saved uploaded file to %s (%d bytes)", destination_path, file_size)
 
-    # 4. Perform extraction
+    # 5. Perform extraction
     extraction_status = "extracted"
     raw_text = ""
     structured_data: Dict[str, Any] = {}
@@ -145,6 +160,8 @@ async def save_and_extract_document(
     page_count = 1
     method = "pymupdf"
     detected_type = document_type_hint or "unclassified"
+    if detected_type == "string":
+        detected_type = "unclassified"
 
     try:
         if content_type == "application/pdf":
@@ -169,7 +186,7 @@ async def save_and_extract_document(
         method = "error"
         confidence = 0.0
 
-    # 5. Persist MortgageDocument in database
+    # 6. Persist MortgageDocument in database
     doc_record = MortgageDocument(
         id=doc_id,
         loan_application_id=loan_application_id,
@@ -182,7 +199,7 @@ async def save_and_extract_document(
     )
     db.add(doc_record)
 
-    # 6. Persist ExtractionResult linked to document
+    # 7. Persist ExtractionResult linked to document
     result_record = ExtractionResult(
         id=uuid.uuid4(),
         document_id=doc_id,
@@ -195,8 +212,14 @@ async def save_and_extract_document(
     )
     db.add(result_record)
 
-    await db.commit()
-    await db.refresh(doc_record)
+    try:
+        await db.commit()
+        await db.refresh(doc_record)
+    except Exception as exc:
+        destination_path.unlink(missing_ok=True)
+        await db.rollback()
+        logger.error("Database commit failed for document %s: %s", doc_id, exc)
+        raise
 
     return doc_record
 

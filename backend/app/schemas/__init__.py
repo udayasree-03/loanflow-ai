@@ -12,6 +12,14 @@ from app.schemas.document import (
     DocumentDetailResponse,
     DocumentListResponse,
 )
+from app.schemas.underwriting import (
+    UnderwritingRunRequest,
+    ExtractedFinancialEntities,
+    DiscrepancyFlag,
+    DTIAnalysis,
+    UnderwritingDecision,
+    UnderwritingResultResponse,
+)
 
 __all__ = [
     "HealthResponse",
@@ -24,4 +32,10 @@ __all__ = [
     "MortgageDocumentResponse",
     "DocumentDetailResponse",
     "DocumentListResponse",
+    "UnderwritingRunRequest",
+    "ExtractedFinancialEntities",
+    "DiscrepancyFlag",
+    "DTIAnalysis",
+    "UnderwritingDecision",
+    "UnderwritingResultResponse",
 ]
