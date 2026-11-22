@@ -6,6 +6,11 @@ backend_dir = str(Path(__file__).resolve().parent.parent)
 if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
+# Ensure WindowsSelectorEventLoopPolicy is configured for async psycopg on Windows
+if sys.platform == "win32":
+    import asyncio
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
@@ -61,6 +66,7 @@ def create_application() -> FastAPI:
                 "status": "online",
                 "docs_url": f"{settings.API_V1_STR}/docs",
                 "health_url": f"{settings.API_V1_STR}/health",
+                "applications_url": f"{settings.API_V1_STR}/applications",
             }
         )
 
