@@ -88,29 +88,57 @@ loanflow-ai/
 
 ### 1. Database Setup
 ```bash
-docker compose up -d postgres
+docker compose up -d
 ```
+*(PostgreSQL with pgvector starts on port **5433** to avoid conflicts with native PostgreSQL)*
 
 ### 2. Backend Setup
 ```bash
 cd backend
-python -m venv venv
-# Windows:
-.\venv\Scripts\activate
-# Linux/macOS:
-# source venv/bin/activate
 
-pip install -r requirements.txt
-cp .env.example .env
-uvicorn app.main:app --reload --port 8000
+# Apply database migrations
+python migrate.py upgrade head
+
+# (Optional) Seed realistic demo applications and mortgage documents
+python seed_demo.py
+
+# Start the FastAPI server
+python -m uvicorn app.main:app --reload --port 8000
 ```
+- Interactive Swagger UI: `http://localhost:8000/api/v1/docs`
+- Health check: `http://localhost:8000/api/v1/health`
 
-### 3. Frontend Setup
+### 3. Frontend Dashboard Setup
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+- Open in browser: `http://localhost:5173`
+
+---
+
+## 🧪 Testing Suite
+
+Run the full automated test suite (18 unit & integration tests covering models, CRUD, PyMuPDF extraction, and LangGraph underwriting):
+```bash
+cd backend
+python -m pytest
+```
+
+---
+
+## 📊 Underwriting Decision Matrix & Conforming Rules
+
+| Metric / Rule | Conforming Benchmark | Agent Action |
+| :--- | :--- | :--- |
+| **Back-End DTI** | $\le 43.0\%$ | Passes Fannie Mae conforming debt threshold |
+| **Back-End DTI** | $43.1\% - 50.0\%$ | `REFER_TO_HUMAN` (Requires underwriter exception review & compensating factors) |
+| **Back-End DTI** | $> 50.0\%$ | `REJECTED` (Excessive debt burden exceeds secondary market ceiling) |
+| **Front-End Housing Ratio** | $\le 28.0\%$ | Passes housing expense ratio guidelines |
+| **Cross-Doc Income Variance** | $\le 2.0\%$ | Reconciles W-2 Box 1 wages with Paystub annualized gross earnings |
+| **Income Discrepancy** | $> 2.0\%$ | Emits `DiscrepancyFlag` & generates prior-to-close explanation condition |
+| **Missing Documentation** | No W-2 / Paystub | `REFER_TO_HUMAN` with actionable document submission requirements |
 
 ---
 
